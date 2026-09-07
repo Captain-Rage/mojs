@@ -935,10 +935,10 @@ export class Pet {
         ctx.closePath();
         ctx.fill();
       }
-      // snout
+      // snout, halfway between the eyes and the mouth
       ctx.fillStyle = `hsl(${this.hue} 65% 76%)`;
       ctx.beginPath();
-      ctx.ellipse(0, 0, r * 0.36, r * 0.27, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, r * 0.1, r * 0.36, r * 0.27, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = `hsl(${this.hue} 55% 60%)`;
       ctx.lineWidth = 1.5;
@@ -946,8 +946,8 @@ export class Pet {
       // nostrils, side by side
       ctx.fillStyle = "#b3596b";
       ctx.beginPath();
-      ctx.arc(-r * 0.16, r * 0.03, r * 0.07, 0, Math.PI * 2);
-      ctx.arc(r * 0.16, r * 0.03, r * 0.07, 0, Math.PI * 2);
+      ctx.arc(-r * 0.16, r * 0.13, r * 0.07, 0, Math.PI * 2);
+      ctx.arc(r * 0.16, r * 0.13, r * 0.07, 0, Math.PI * 2);
       ctx.fill();
     }
   }
