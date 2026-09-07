@@ -938,16 +938,16 @@ export class Pet {
       // snout
       ctx.fillStyle = `hsl(${this.hue} 65% 76%)`;
       ctx.beginPath();
-      ctx.ellipse(facing * r * 0.35, 0, r * 0.36, r * 0.27, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, r * 0.36, r * 0.27, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = `hsl(${this.hue} 55% 60%)`;
       ctx.lineWidth = 1.5;
       ctx.stroke();
-      // nostrils
+      // nostrils, side by side
       ctx.fillStyle = "#b3596b";
       ctx.beginPath();
-      ctx.arc(facing * r * 0.47, -r * 0.09, r * 0.07, 0, Math.PI * 2);
-      ctx.arc(facing * r * 0.47, r * 0.09, r * 0.07, 0, Math.PI * 2);
+      ctx.arc(-r * 0.16, r * 0.03, r * 0.07, 0, Math.PI * 2);
+      ctx.arc(r * 0.16, r * 0.03, r * 0.07, 0, Math.PI * 2);
       ctx.fill();
     }
   }
