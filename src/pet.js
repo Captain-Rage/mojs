@@ -21,6 +21,7 @@ const NEAR = 130; // px: creatures sense each other within this range
 const DISTANT = 170; // px: avoidance zone after a meeting
 const BUMP = 52; // px: considered a collision (two radii + a little)
 const CONTACT = 88; // px: standing together / holding a meeting
+const EDGE = 42; // px: screen-edge aversion zone
 
 function lerp(a, b, t) {
   return a + (b - a) * t;
@@ -267,17 +268,55 @@ export class Pet {
     if (this.escape > 0) {
       this.angle = this.escapeAngle; // sprint wins over any other steering
     } else {
+      // gentle aversion from the screen edges so pets don't camp on borders
+      let repX = 0;
+      let repY = 0;
+      if (this.x < EDGE) repX = 1;
+      else if (this.x > W - EDGE) repX = -1;
+      if (this.y < EDGE) repY = 1;
+      else if (this.y > H - EDGE) repY = -1;
+      if (repX !== 0 || repY !== 0) {
+        const distX = this.x < W / 2 ? this.x : W - this.x;
+        const distY = this.y < H / 2 ? this.y : H - this.y;
+        const strength = 1 - Math.min(distX, distY) / EDGE;
+        const want = Math.atan2(repY, repX);
+        let d = want - this.angle;
+        while (d > Math.PI) d -= Math.PI * 2;
+        while (d < -Math.PI) d += Math.PI * 2;
+        this.angle += d * Math.min(1, strength * 10 * dt);
+        while (this.angle > Math.PI) this.angle -= Math.PI * 2;
+        while (this.angle < -Math.PI) this.angle += Math.PI * 2;
+      }
       this.angle += steer;
     }
     this.x += Math.cos(this.angle) * speed * dt;
     this.y += Math.sin(this.angle) * speed * dt + Math.sin(this.t * 2) * 7 * bob * dt * (bob > 1 ? 2 : 1);
 
-    // ---- walls ---------------------------------------------------------
+    // ---- walls: clamp + glide along them (no mirror-bounce pinning) -----
     const m = this.r + 4;
-    if (this.x < m) { this.x = m; this.angle = Math.PI - this.angle; }
-    if (this.x > W - m) { this.x = W - m; this.angle = Math.PI - this.angle; }
-    if (this.y < m) { this.y = m; this.angle = -this.angle; }
-    if (this.y > H - m) { this.y = H - m; this.angle = -this.angle; }
+    const onL = this.x < m;
+    const onR = this.x > W - m;
+    const onT = this.y < m;
+    const onB = this.y > H - m;
+    this.x = Math.max(m, Math.min(W - m, this.x));
+    this.y = Math.max(m, Math.min(H - m, this.y));
+    if (onL || onR || onT || onB) {
+      // turn so we glide along the wall (outward component + current motion)
+      let vx = this.angle >= 0 && this.angle < Math.PI ? Math.max(0.15, Math.cos(this.angle) * 0.8) : Math.min(-0.15, Math.cos(this.angle) * 0.8);
+      let vy = 0.6;
+      if (onT || onB) {
+        vy = onT ? 0.55 : -0.55;
+        vx = Math.cos(this.angle) * 0.8;
+      } else {
+        vy = Math.sin(this.angle) * 0.8;
+      }
+      if (onL) vx = 0.55;
+      if (onR) vx = -0.55;
+      if (onT) vy = 0.55;
+      if (onB) vy = -0.55;
+      this.angle = Math.atan2(vy, vx) + (Math.random() - 0.5) * 0.3;
+      if (this.escape > 0) this.escapeAngle = this.angle;
+    }
   }
 
   draw(ctx, dt) {
