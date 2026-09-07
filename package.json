@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "vite preview"
+    "start": "bun server.js"
   },
   "devDependencies": {
     "vite": "^6.0.0"
