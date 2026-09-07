@@ -4,8 +4,8 @@ Desktop-mate creatures that wander around your browser, like the old desktop
 pets (BonziBuddy, Neopets, eSheep) but living on a web page.
 
 Two creatures roam the screen by default — each randomly chosen from the
-available species (critter, squirrel, bee, whale, snail, cat, pigeon,
-piglet): they wander with a gentle Perlin-style drift, turn around at the
+available species (critter, squirrel, bee, whale, minke, snail, cat,
+pigeon, piglet): they wander with a gentle Perlin-style drift, turn around at the
 window edges, blink, bob, and rest from time to time. When two meet they
 stop and react — curious greeting, happy, love, annoyed — before parting;
 collisions startle them apart.

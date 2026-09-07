@@ -46,6 +46,7 @@ export const KINDS = {
   squirrel: { r: 23, speed: 1.0, hue: 26, walker: true, eyeS: 0.22, spread: 0.3, gaze: 0.3, eyS: -0.15, myS: 0.35, mrS: 0.25, sweat: true },
   bee: { r: 17, speed: 1.25, hue: 46, walker: false },
   whale: { r: 38, speed: 0.6, hue: 205, walker: false, eyeS: 0.16, spread: 0.42, gaze: 0.42, eyS: -0.08, myS: 0.36, mrS: 0.2, sweat: true, big: true },
+  minke: { r: 32, speed: 0.7, hue: 205, walker: false, eyeS: 0.16, spread: 0.42, gaze: 0.42, eyS: -0.08, myS: 0.36, mrS: 0.2, sweat: true },
   snail: { r: 20, speed: 0.35, hue: 145, walker: false },
   cat: { r: 25, speed: 0.95, hue: 32, walker: true, eyeS: 0.21, spread: 0.3, gaze: 0.3, eyS: -0.15, myS: 0.35, mrS: 0.25, sweat: true },
   pigeon: { r: 23, speed: 0.9, hue: 218, walker: false },
@@ -410,6 +411,18 @@ export class Pet {
       ctx.closePath();
       ctx.fill();
       ctx.restore();
+    } else if (this.kind === "minke") {
+      // simple forked tail
+      const bx = -facing * r * 1.0;
+      ctx.fillStyle = `hsl(${this.hue} 60% 36%)`;
+      ctx.beginPath();
+      ctx.moveTo(bx, -r * 0.15);
+      ctx.lineTo(bx - facing * r * 0.5, -r * 0.62);
+      ctx.lineTo(bx - facing * r * 0.18, 0);
+      ctx.lineTo(bx - facing * r * 0.5, r * 0.62);
+      ctx.lineTo(bx, r * 0.15);
+      ctx.closePath();
+      ctx.fill();
     } else if (this.kind === "cat") {
       // tapered tail curving up behind with a dunk-dark tip
       const tx = -facing * r * 1.35;
@@ -585,6 +598,18 @@ export class Pet {
         ctx.stroke();
       }
       ctx.restore();
+    } else if (this.kind === "minke") {
+      const g = ctx.createLinearGradient(0, -r, 0, r);
+      g.addColorStop(0, `hsl(${hue} 60% 62%)`);
+      g.addColorStop(1, `hsl(${hue} 65% 42%)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * 1.2, r * 0.9, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = `hsl(${hue} 70% 78%)`;
+      ctx.beginPath();
+      ctx.ellipse(r * 0.3, r * 0.42, r * 0.8, r * 0.42, 0, 0, Math.PI * 2);
+      ctx.fill();
     } else if (this.kind === "snail") {
       // soft wet foot with a front head bump
       const g = ctx.createLinearGradient(0, -r * 0.5, 0, r);
@@ -961,6 +986,29 @@ export class Pet {
         ctx.globalAlpha = 1;
       }
       ctx.restore();
+    } else if (this.kind === "minke") {
+      // pectoral fin
+      ctx.fillStyle = `hsl(${this.hue} 60% 38%)`;
+      ctx.beginPath();
+      ctx.moveTo(facing * r * 0.55, r * 0.15);
+      ctx.quadraticCurveTo(facing * r * 0.85, r * 0.35, facing * r * 0.62, r * 0.62);
+      ctx.quadraticCurveTo(facing * r * 0.42, r * 0.4, facing * r * 0.55, r * 0.15);
+      ctx.closePath();
+      ctx.fill();
+      // blowhole spout
+      const tm = this.t % 9;
+      if (tm < 1.5 && this.mood !== "annoyed" && this.mood !== "scared") {
+        ctx.globalAlpha = 0.8 * (1 - tm / 1.5);
+        ctx.strokeStyle = "#cfe8ff";
+        ctx.lineWidth = 3;
+        for (const dx of [-0.14, 0, 0.14]) {
+          ctx.beginPath();
+          ctx.moveTo(dx * r, -r * 0.95);
+          ctx.quadraticCurveTo(dx * r - r * 0.12, -r * 1.5, dx * r * 0.4, -r * 1.55);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
     } else if (this.kind === "pigeon") {
       // folded wings
       ctx.strokeStyle = `hsl(${this.hue} 25% 42%)`;
