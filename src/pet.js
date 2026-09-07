@@ -9,6 +9,11 @@
  *   alone for a long time → sad, until company arrives
  *   near a friend → turn to face them and slow down to "talk"
  *
+ * Pets never get stuck ramming each other: overlapping bodies are pushed
+ * apart, annoyed creatures steer away continuously, and after every
+ * meeting both pick a fresh direction and avoid each other for a few
+ * seconds before wandering again.
+ *
  * Moods fade back to a neutral "wander" state.
  */
 
@@ -63,6 +68,8 @@ export class Pet {
     this.sinceTalk = 99;
     this.fx = []; // floating emotes: {label, t, ttl}
     this.partner = null;
+    this.cooldown = 0; // seconds of avoidance after a meeting ends
+    this.wasMeeting = false;
   }
 
   setMood(m) {
@@ -88,6 +95,7 @@ export class Pet {
     this.moodTime += dt;
     this.sinceBump += dt;
     this.sinceTalk += dt;
+    this.cooldown = Math.max(0, this.cooldown - dt);
 
     // floating emotes age + drift
     for (const f of this.fx) f.t += dt;
@@ -125,14 +133,22 @@ export class Pet {
       this.recoil = 0.9;
     } else if (contact) {
       this.partner = other;
+      this.wasMeeting = true;
       if (this.moodTime > 6.5) this.setMood("annoyed");
       else if (this.moodTime > 3.2) this.setMood("love");
       else if (this.moodTime > 1) this.setMood("happy");
       else this.setMood("curious");
     } else {
+      const parting = this.wasMeeting;
+      this.wasMeeting = false;
       this.partner = null;
       if (this.mood === "annoyed" || this.mood === "love" || this.mood === "happy" || this.mood === "curious") {
         this.setMood("wander");
+      }
+      if (parting) {
+        // meeting just ended: pick a fresh direction and keep apart for a while
+        this.cooldown = 4 + Math.random() * 3;
+        this.angle = Math.random() * Math.PI * 2;
       }
       if (this.aloneFor > 11 && this.mood !== "sad") {
         this.setMood("sad");
@@ -176,11 +192,10 @@ export class Pet {
         this.emit(Math.random() < 0.7 ? "♥" : "mer kramar!");
       }
     } else if (this.mood === "annoyed") {
-      speed = this.spd * 0.4;
-      if (this.moodTime > 8) {
-        // enough: turn away and leave
-        this.setMood("wander");
-        if (other) this.angle = Math.atan2(this.y - other.y, this.x - other.x) + (Math.random() - 0.5) * 1;
+      speed = this.spd * 1.2;
+      if (other) {
+        // keep turning away so they actually separate instead of ramming
+        this.angle = Math.atan2(this.y - other.y, this.x - other.x) + (Math.random() - 0.5) * 0.5;
       }
       if (this.sinceTalk > 1.8) {
         this.sinceTalk = 0;
@@ -206,6 +221,20 @@ export class Pet {
     // slow down when a friend is near and we're not wandering off
     if (contact && (this.mood === "curious" || this.mood === "happy" || this.mood === "love")) {
       if (other) this.faceToward(other, 2.5);
+    }
+
+    // ---- separation: never stack, and avoid each other during cooldown --
+    if (other) {
+      if (d < BUMP && d > 0) {
+        // physically push overlapping bodies apart so they can't stay glued
+        const push = ((BUMP - d) / BUMP) * this.spd * dt * 2.2;
+        this.x += ((this.x - other.x) / d) * push;
+        this.y += ((this.y - other.y) / d) * push;
+      }
+      if (this.cooldown > 0 && d < NEAR) {
+        // after a meeting, turn and walk the other way for a moment
+        this.angle = Math.atan2(this.y - other.y, this.x - other.x) + (Math.random() - 0.5) * 0.7;
+      }
     }
 
     this.angle += steer;
