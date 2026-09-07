@@ -1,31 +1,20 @@
 /**
  * A wandering "desktop mate" creature with social behaviour. Drawn on a
- * shared canvas. Creatures wander on their own, but when two get close they
- * meet, react, and change mood + facial expression:
+ * shared canvas. Comes in several species (squirrel, bee, whale, snail,
+ * cat, pigeon, piglet, plus the original critter).
  *
- *   lonely  → curious → happy greeting → love (blush, hearts)
- *            → after a while together: annoyed/crowded → they part
- *   bump    → startled (scared), then they hop apart
- *   alone for a long time → sad, until company arrives
- *   near a friend → turn to face them and slow down to "talk"
- *
- * Pets never get stuck ramming each other: overlapping bodies are pushed
- * apart, annoyed creatures steer away continuously, and after every
- * meeting both pick a fresh direction and avoid each other for a few
- * seconds before wandering again.
- *
- * Moods fade back to a neutral "wander" state.
+ * Social behaviour (shared by every species): when two get close they stop,
+ * face each other and react - curious greeting -> happy (blush, smile) ->
+ * love (pulse, hearts) -> annoyed (sweat, wavy frown) before parting.
+ * Collisions startle them apart. Nobody can get stuck: bodies are pushed
+ * apart, walls make them glide instead of bouncing back, and a soft
+ * edge-aversion keeps them off the borders.
  */
 
-const NEAR = 130; // px: creatures sense each other within this range
+const NEAR = 130; // px base: creatures sense each other within this range
 const DISTANT = 170; // px: avoidance zone after a meeting
-const BUMP = 52; // px: considered a collision (two radii + a little)
-const CONTACT = 88; // px: standing together / holding a meeting
+const CONTACT_PAD = 42; // px added to the summed radii for "meeting" range
 const EDGE = 42; // px: screen-edge aversion zone
-
-function lerp(a, b, t) {
-  return a + (b - a) * t;
-}
 
 function dist2(a, b) {
   const dx = a.x - b.x;
@@ -51,31 +40,49 @@ function drawSweat(ctx, x, y, s) {
   ctx.fill();
 }
 
+// species: { r, speed, hue, face geometry, walker }
+export const KINDS = {
+  critter: { r: 26, speed: 1.0, hue: 150, walker: true, eyeS: 0.22, spread: 0.3, gaze: 0.3, eyS: -0.15, myS: 0.35, mrS: 0.25, sweat: true },
+  squirrel: { r: 23, speed: 1.0, hue: 26, walker: true, eyeS: 0.22, spread: 0.3, gaze: 0.3, eyS: -0.15, myS: 0.35, mrS: 0.25, sweat: true },
+  bee: { r: 17, speed: 1.25, hue: 46, walker: false },
+  whale: { r: 38, speed: 0.6, hue: 205, walker: false, eyeS: 0.16, spread: 0.42, gaze: 0.42, eyS: -0.08, myS: 0.36, mrS: 0.2, sweat: true, big: true },
+  snail: { r: 20, speed: 0.35, hue: 145, walker: false },
+  cat: { r: 25, speed: 0.95, hue: 32, walker: true, eyeS: 0.21, spread: 0.3, gaze: 0.3, eyS: -0.15, myS: 0.35, mrS: 0.25, sweat: true },
+  pigeon: { r: 23, speed: 0.9, hue: 218, walker: false },
+  piglet: { r: 25, speed: 0.85, hue: 350, walker: true, eyeS: 0.2, spread: 0.3, gaze: 0.3, eyS: -0.15, myS: 0.35, mrS: 0.25, sweat: true },
+};
+
+const WALKERS = new Set(["critter", "squirrel", "cat", "piglet"]);
+
 export class Pet {
-  constructor(ctx, { x, y, hue = 150, speed = 1 }) {
+  constructor(ctx, { x, y, kind = "critter", hue, speed = 1 }) {
+    const cfg = KINDS[kind] || KINDS.critter;
     this.ctx = ctx;
     this.x = x;
     this.y = y;
-    this.hue = hue;
-    this.spd = speed * 60; // px / s at 1x
+    this.kind = kind;
+    this.hue = hue ?? cfg.hue;
+    this.r = cfg.r;
+    this.spd = cfg.speed * speed * 60; // px/s
+    this.cfg = cfg;
+    this.bobAmp = this.r * 0.3;
     this.angle = Math.random() * Math.PI * 2;
-    this.r = 26;
     this.t = Math.random() * 100;
 
     // social state
     this.mood = "wander";
     this.moodTime = 0;
-    this.aloneFor = 0; // seconds without any neighbour within NEAR
+    this.aloneFor = 0;
     this.sinceBump = 99;
     this.sinceTalk = 99;
-    this.fx = []; // floating emotes: {label, t, ttl}
+    this.fx = [];
     this.partner = null;
-    this.cooldown = 0; // seconds of avoidance after a meeting ends
+    this.cooldown = 0;
     this.wasMeeting = false;
-    this.meetingTime = 0; // seconds spent in the current meeting (never resets mid-meeting)
-    this.escape = 0; // seconds of forced sprint away after a collision
+    this.meetingTime = 0;
+    this.escape = 0;
     this.escapeAngle = 0;
-    this.sinceMeeting = 99; // seconds spent outside a meeting
+    this.sinceMeeting = 99;
   }
 
   setMood(m) {
@@ -103,27 +110,25 @@ export class Pet {
     this.sinceTalk += dt;
     this.cooldown = Math.max(0, this.cooldown - dt);
 
-    // floating emotes age + drift
     for (const f of this.fx) f.t += dt;
     this.fx = this.fx.filter((f) => f.t < f.ttl);
 
     // ---- find nearest other creature ---------------------------------
     let other = null;
     let best = Infinity;
-    let sum = 0;
     for (const p of pets) {
       if (p === this) continue;
       const d2 = dist2(this, p);
-      sum += d2;
       if (d2 < best) {
         best = d2;
         other = p;
       }
     }
     const d = other ? Math.sqrt(best) : Infinity;
-    const bump = other && d < BUMP;
-    const contact = other && d < CONTACT;
-    const near = other && d < NEAR;
+    const sumR = other ? this.r + other.r : 0;
+    const bump = other && d < sumR * 0.9;
+    const contact = other && d < sumR + CONTACT_PAD;
+    const near = other && d < NEAR + sumR * 0.5;
 
     if (near) this.aloneFor = 0;
     else this.aloneFor += dt;
@@ -134,7 +139,6 @@ export class Pet {
     if (bump && this.mood !== "scared") {
       this.setMood("scared");
       this.partner = other;
-      // sprint away from the collision for a fixed time; guaranteed to part
       this.escape = 0.9;
       this.escapeAngle = Math.atan2(this.y - other.y, this.x - other.x);
       this.emit("!");
@@ -144,8 +148,6 @@ export class Pet {
       this.wasMeeting = true;
       if (startMeeting) {
         this.meetingTime = 0;
-        // quick re-meet after a parting: escalate the avoidance so pairs
-        // can't fall into an endless "meet again" loop
         if (this.sinceMeeting < 8) this.cooldown = Math.min(this.cooldown + 6, 25);
       }
       this.meetingTime += dt;
@@ -162,7 +164,6 @@ export class Pet {
         this.setMood("wander");
       }
       if (parting) {
-        // meeting just ended: pick a fresh direction and keep apart for a while
         this.sinceMeeting = 0;
         this.cooldown = 6 + Math.random() * 3;
         this.angle = Math.random() * Math.PI * 2;
@@ -173,11 +174,11 @@ export class Pet {
       }
       if (this.mood === "sad" && near) this.setMood("wander");
       if (this.mood === "sad" && this.moodTime > 4) {
-        this.setMood("wander"); // cheers up on its own
+        this.setMood("wander");
         this.aloneFor = 6;
       }
       if (this.mood === "wander" && this.moodTime > 9) {
-        this.setMood("curious"); // pauses to look around occasionally
+        this.setMood("curious");
       }
     }
 
@@ -211,7 +212,6 @@ export class Pet {
     } else if (this.mood === "annoyed") {
       speed = this.spd * 1.2;
       if (other) {
-        // keep turning away so they actually separate instead of ramming
         this.angle = Math.atan2(this.y - other.y, this.x - other.x) + (Math.random() - 0.5) * 0.5;
       }
       if (this.sinceTalk > 1.8) {
@@ -221,11 +221,9 @@ export class Pet {
     } else if (this.mood === "scared") {
       speed = this.spd * 1.8;
       if (this.escape > 0) {
-        // keep sprinting away; jitter only slightly so we stay on course
         this.escapeAngle += (Math.random() - 0.5) * 0.08;
         this.escape -= dt;
       } else {
-        // collision fully resolved: calm down and stay clear for a moment
         this.setMood("wander");
         this.cooldown = 3 + Math.random() * 2;
       }
@@ -236,7 +234,6 @@ export class Pet {
         this.emit("💧");
       }
     } else {
-      // wander: gentle curved drift, occasional stops
       if (Math.random() < dt * 1.6) steer += (Math.random() - 0.5) * 1.4;
     }
     steer += Math.sin(this.t * 0.6) * dt * 0.4;
@@ -250,23 +247,22 @@ export class Pet {
     for (const q of pets) {
       if (q === this) continue;
       const dq = Math.hypot(q.x - this.x, q.y - this.y);
-      if (dq < BUMP && dq > 0) {
-        // physically push overlapping bodies apart so they can't stay glued
-        const push = ((BUMP - dq) / BUMP) * this.spd * dt * 1.6;
+      const minSep = (this.r + q.r) * 0.95;
+      if (dq < minSep && dq > 0) {
+        const push = ((minSep - dq) / minSep) * this.spd * dt * 1.6;
         this.x += ((this.x - q.x) / dq) * push;
         this.y += ((this.y - q.y) / dq) * push;
       }
     }
     if (other && this.cooldown > 0 && d < DISTANT && (this.mood === "wander" || this.mood === "sad")) {
-      // after a meeting, turn the other way, walk briskly, and stay clear
       this.angle = Math.atan2(this.y - other.y, this.x - other.x) + (Math.random() - 0.5) * 0.7;
-      if (this.mood === "wander" || this.mood === "happy" || this.mood === "curious") {
+      if (this.mood === "wander") {
         speed = Math.max(speed, this.spd * 1.15);
       }
     }
 
     if (this.escape > 0) {
-      this.angle = this.escapeAngle; // sprint wins over any other steering
+      this.angle = this.escapeAngle;
     } else {
       // gentle aversion from the screen edges so pets don't camp on borders
       let repX = 0;
@@ -290,7 +286,7 @@ export class Pet {
       this.angle += steer;
     }
     this.x += Math.cos(this.angle) * speed * dt;
-    this.y += Math.sin(this.angle) * speed * dt + Math.sin(this.t * 2) * 7 * bob * dt * (bob > 1 ? 2 : 1);
+    this.y += Math.sin(this.angle) * speed * dt + Math.sin(this.t * 2) * this.bobAmp * bob * dt * (bob > 1 ? 2 : 1);
 
     // ---- walls: clamp + glide along them (no mirror-bounce pinning) -----
     const m = this.r + 4;
@@ -301,7 +297,6 @@ export class Pet {
     this.x = Math.max(m, Math.min(W - m, this.x));
     this.y = Math.max(m, Math.min(H - m, this.y));
     if (onL || onR || onT || onB) {
-      // turn so we glide along the wall (outward component + current motion)
       let vx = this.angle >= 0 && this.angle < Math.PI ? Math.max(0.15, Math.cos(this.angle) * 0.8) : Math.min(-0.15, Math.cos(this.angle) * 0.8);
       let vy = 0.6;
       if (onT || onB) {
@@ -319,152 +314,30 @@ export class Pet {
     }
   }
 
-  draw(ctx, dt) {
+  // ---- drawing -----------------------------------------------------------
+
+  draw(ctx) {
     const blink = Math.sin(this.t * 1.5) > 0.99;
     const pulse = this.mood === "love" ? 1 + Math.sin(this.t * 7) * 0.04 : 1;
+    const facing = Math.cos(this.angle) >= 0 ? 1 : -1;
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.scale(pulse, pulse);
-    const facing = Math.cos(this.angle) >= 0 ? 1 : -1;
 
-    // shadow
     ctx.fillStyle = "rgba(0,0,0,0.18)";
+    const shadowW = this.r * 0.8;
     ctx.beginPath();
-    ctx.ellipse(0, this.r + 6, this.r * 0.8, 6, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, this.r + 6, shadowW, 5, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // body
-    const g = ctx.createLinearGradient(0, -this.r, 0, this.r);
-    g.addColorStop(0, `hsl(${this.hue} 70% 68%)`);
-    g.addColorStop(1, `hsl(${this.hue} 70% 44%)`);
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(0, 0, this.r, 0, Math.PI * 2);
-    ctx.fill();
-
-    // belly highlight
-    ctx.fillStyle = "rgba(255,255,255,0.25)";
-    ctx.beginPath();
-    ctx.ellipse(-this.r * 0.2, -this.r * 0.35, this.r * 0.45, this.r * 0.3, -0.4, 0, Math.PI * 2);
-    ctx.fill();
-
-    const r = this.r;
-    const ey = -r * 0.15;
-    const ex = facing * r * 0.3;
-    const lx = -r * 0.3;
-    const rx2 = r * 0.3;
-    const eyeR = r * 0.22;
-    const open = blink ? 0.12 : 1;
-
-    ctx.strokeStyle = "#1a1d2e";
-    ctx.lineWidth = 2;
-
-    if (this.mood === "scared") {
-      // wide eyes, tiny pupils
-      ctx.fillStyle = "#fff";
-      for (const exx of [lx, rx2]) {
-        ctx.beginPath(); ctx.arc(exx, ey, eyeR * 1.15, 0, Math.PI * 2); ctx.fill();
-      }
-      ctx.fillStyle = "#1a1d2e";
-      for (const exx of [lx + ex * 0.2, rx2 + ex * 0.2]) {
-        ctx.beginPath(); ctx.arc(exx, ey, eyeR * 0.28, 0, Math.PI * 2); ctx.fill();
-      }
-      // "o" mouth
-      ctx.beginPath(); ctx.arc(ex * 0.4 + r * 0.1, r * 0.42, r * 0.16, 0, Math.PI * 2); ctx.stroke();
-    } else if (this.mood === "annoyed") {
-      // half-lidded eyes + flat wavy mouth + sweat
-      ctx.fillStyle = "#1a1d2e";
-      ctx.strokeStyle = "#1a1d2e";
-      for (const exx of [lx, rx2]) {
-        // iris tucked under heavy lid
-        ctx.fillRect(exx - eyeR * 0.55, ey - eyeR * 0.3, eyeR * 1.1, eyeR * 0.9);
-        ctx.strokeRect(exx - eyeR * 0.55, ey - eyeR * 0.3, eyeR * 1.1, eyeR * 0.9);
-      }
-      ctx.strokeStyle = "#1a1d2e";
-      ctx.beginPath();
-      ctx.moveTo(ex * 0.4 + r * 0.1 - r * 0.2, r * 0.4);
-      ctx.quadraticCurveTo(ex * 0.4 + r * 0.1, r * 0.52, ex * 0.4 + r * 0.1 + r * 0.2, r * 0.4);
-      ctx.stroke();
-      drawSweat(ctx, r * 0.5 + 6, ey - r * 0.05, 6);
-    } else if (this.mood === "sad") {
-      // droopy eyes + frown
-      ctx.strokeStyle = "#1a1d2e";
-      for (const exx of [lx, rx2]) {
-        ctx.beginPath();
-        ctx.arc(exx, ey + r * 0.12, eyeR * 0.9, Math.PI * 1.05, Math.PI * 1.95);
-        ctx.stroke();
-      }
-      ctx.beginPath();
-      ctx.arc(ex * 0.4 + r * 0.1, r * 0.52, r * 0.24, Math.PI * 1.15, Math.PI * 1.85);
-      ctx.stroke();
-    } else if (this.mood === "happy" || this.mood === "love") {
-      for (const exx of [lx, rx2]) {
-        // closed happy eyes (∩), open wide when excited
-        if (this.mood === "love") {
-          ctx.fillStyle = "#fff";
-          ctx.beginPath(); ctx.arc(exx, ey, eyeR, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = "#1a1d2e";
-          ctx.beginPath(); ctx.arc(exx + ex * 0.4, ey, eyeR * 0.44, 0, Math.PI * 2); ctx.fill();
-        } else {
-          ctx.strokeStyle = "#1a1d2e";
-          ctx.lineWidth = 2.4;
-          ctx.beginPath();
-          ctx.arc(exx, ey + r * 0.05, eyeR * 1.1, Math.PI, 0);
-          ctx.stroke();
-        }
-      }
-      // blush
-      ctx.fillStyle = "rgba(255,120,140,0.4)";
-      ctx.beginPath(); ctx.ellipse(lx - eyeR * 0.7, ey + r * 0.32, eyeR * 0.8, eyeR * 0.5, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(rx2 + eyeR * 0.7, ey + r * 0.32, eyeR * 0.8, eyeR * 0.5, 0, 0, Math.PI * 2); ctx.fill();
-      // big smile
-      ctx.strokeStyle = "#1a1d2e";
-      ctx.lineWidth = 2.4;
-      ctx.beginPath();
-      ctx.arc(ex * 0.4 + r * 0.1, r * 0.2, r * 0.3, 0.15 * Math.PI, 0.85 * Math.PI);
-      ctx.stroke();
-      if (this.mood === "love" && this.fx.some((f) => f.label === "♥")) {
-        drawHeart(ctx, ex * 0.4 + r * 0.1, r * 0.05, 7, "#ff5d8f");
-      }
-    } else {
-      // normal wandering face
-      ctx.fillStyle = "#fff";
-      ctx.beginPath(); ctx.arc(lx, ey, eyeR, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(rx2, ey, eyeR, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(lx + ex, ey, eyeR * 0.15, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(rx2 + ex, ey, eyeR * 0.15, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "#1a1d2e";
-      ctx.beginPath(); ctx.arc(lx + ex * 0.5, ey + (1 - open) * 1.5, eyeR * 0.4, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(rx2 + ex * 0.5, ey + (1 - open) * 1.5, eyeR * 0.4, 0, Math.PI * 2); ctx.fill();
-
-      ctx.strokeStyle = "#1a1d2e";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(ex * 0.4 + r * 0.1, r * 0.35, r * 0.25, 0.1 * Math.PI, 0.9 * Math.PI);
-      ctx.stroke();
-
-      if (blink) {
-        ctx.fillStyle = "#1a1d2e";
-        ctx.fillRect(lx - eyeR + 2, ey + 1, eyeR * 2 - 4, 4);
-        ctx.fillRect(rx2 - eyeR + 2, ey + 1, eyeR * 2 - 4, 4);
-      }
-    }
-
-    // feet
-    ctx.strokeStyle = `hsl(${this.hue} 70% 34%)`;
-    ctx.lineWidth = 3;
-    ctx.lineCap = "round";
-    const step = this.mood === "scared" || this.mood === "annoyed" ? Math.sin(this.t * 18) * 6 : Math.sin(this.t * 10) * 4;
-    ctx.beginPath();
-    ctx.moveTo(-this.r * 0.4, this.r * 0.75);
-    ctx.lineTo(-this.r * 0.4 + step, this.r * 0.95);
-    ctx.moveTo(this.r * 0.4, this.r * 0.75);
-    ctx.lineTo(this.r * 0.4 - step, this.r * 0.95);
-    ctx.stroke();
+    this.drawBack(ctx, facing);
+    this.drawBody(ctx, facing);
+    this.drawFace(ctx, facing, blink);
+    this.drawFront(ctx, facing);
+    if (WALKERS.has(this.kind)) this.drawFeet(ctx, facing);
 
     ctx.restore();
 
-    // floating emotes above the head
     for (const f of this.fx) {
       const p = f.t / f.ttl;
       const alpha = p < 0.2 ? p / 0.2 : 1 - (p - 0.2) / 0.8;
@@ -472,8 +345,500 @@ export class Pet {
       ctx.font = "16px system-ui, sans-serif";
       ctx.textAlign = "center";
       ctx.fillStyle = "#fff";
-      ctx.fillText(f.label, this.x, this.y - this.r * 1.8 - 16 * p);
+      ctx.fillText(f.label, this.x, this.y - this.r * 1.9 - 16 * p);
     }
     ctx.globalAlpha = 1;
+  }
+
+  drawBack(ctx, facing) {
+    const r = this.r;
+    if (this.kind === "squirrel") {
+      ctx.save();
+      ctx.translate(-facing * r * 1.05, -r * 0.1);
+      ctx.rotate(-facing * 0.55);
+      const g = ctx.createLinearGradient(0, -r * 0.7, 0, r * 0.7);
+      g.addColorStop(0, `hsl(${this.hue} 55% 52%)`);
+      g.addColorStop(1, `hsl(${this.hue} 60% 36%)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * 0.5, r * 0.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.18)";
+      ctx.beginPath();
+      ctx.ellipse(-r * 0.08, -r * 0.25, r * 0.3, r * 0.45, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    } else if (this.kind === "bee") {
+      ctx.fillStyle = "rgba(255,255,255,0.65)";
+      ctx.beginPath();
+      ctx.ellipse(-r * 0.42, -r * 0.55, r * 0.3, r * 0.55, 0.4, 0, Math.PI * 2);
+      ctx.ellipse(r * 0.42, -r * 0.55, r * 0.3, r * 0.55, -0.4, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (this.kind === "whale") {
+      const bx = -facing * r * 1.0;
+      ctx.fillStyle = `hsl(${this.hue} 60% 36%)`;
+      ctx.beginPath();
+      ctx.moveTo(bx, -r * 0.15);
+      ctx.lineTo(bx - facing * r * 0.5, -r * 0.62);
+      ctx.lineTo(bx - facing * r * 0.18, 0);
+      ctx.lineTo(bx - facing * r * 0.5, r * 0.62);
+      ctx.lineTo(bx, r * 0.15);
+      ctx.closePath();
+      ctx.fill();
+    } else if (this.kind === "cat") {
+      ctx.strokeStyle = `hsl(${this.hue} 25% 52%)`;
+      ctx.lineWidth = r * 0.32;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(-facing * r * 0.85, r * 0.2);
+      ctx.quadraticCurveTo(-facing * r * 1.45, r * 0.15, -facing * r * 1.25, -r * 0.35);
+      ctx.stroke();
+    } else if (this.kind === "piglet") {
+      ctx.strokeStyle = `hsl(${this.hue} 55% 62%)`;
+      ctx.lineWidth = r * 0.16;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.arc(-facing * r * 1.0, -r * 0.1, r * 0.26, 0.6, Math.PI * 1.4);
+      ctx.stroke();
+    } else if (this.kind === "pigeon") {
+      ctx.fillStyle = `hsl(${this.hue} 20% 55%)`;
+      for (const dy of [-0.12, 0.05, 0.22]) {
+        ctx.beginPath();
+        ctx.moveTo(-facing * r * 1.0, dy * r * 2.6);
+        ctx.lineTo(-facing * r * 1.55, dy * r * 2.6 + r * 0.12);
+        ctx.lineTo(-facing * r * 1.0, dy * r * 2.6 + r * 0.3);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+  }
+
+  drawBody(ctx, facing) {
+    const r = this.r;
+    const hue = this.hue;
+    if (this.kind === "critter" || this.kind === "squirrel" || this.kind === "cat" || this.kind === "piglet") {
+      const g = ctx.createLinearGradient(0, -r, 0, r);
+      g.addColorStop(0, `hsl(${hue} 70% 68%)`);
+      g.addColorStop(1, `hsl(${hue} 70% 44%)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.25)";
+      ctx.beginPath();
+      ctx.ellipse(-r * 0.2, -r * 0.35, r * 0.45, r * 0.3, -0.4, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (this.kind === "bee") {
+      ctx.save();
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r, r * 0.82, 0, 0, Math.PI * 2);
+      ctx.clip();
+      const g = ctx.createLinearGradient(0, -r, 0, r);
+      g.addColorStop(0, `hsl(${hue} 85% 62%)`);
+      g.addColorStop(1, `hsl(${hue} 85% 48%)`);
+      ctx.fillStyle = g;
+      ctx.fillRect(-r, -r, r * 2, r * 2);
+      ctx.fillStyle = "rgba(25,20,10,0.85)";
+      ctx.fillRect(-r, -r * 0.35, r * 2, r * 0.24);
+      ctx.fillRect(-r, r * 0.18, r * 2, r * 0.24);
+      ctx.restore();
+      ctx.strokeStyle = "rgba(25,20,10,0.55)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r, r * 0.82, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (this.kind === "whale") {
+      const g = ctx.createLinearGradient(0, -r, 0, r);
+      g.addColorStop(0, `hsl(${hue} 60% 62%)`);
+      g.addColorStop(1, `hsl(${hue} 65% 42%)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * 1.2, r * 0.9, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = `hsl(${hue} 70% 78%)`;
+      ctx.beginPath();
+      ctx.ellipse(r * 0.3, r * 0.42, r * 0.8, r * 0.42, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (this.kind === "snail") {
+      // foot
+      const g = ctx.createLinearGradient(0, -r * 0.5, 0, r);
+      g.addColorStop(0, `hsl(${hue} 45% 70%)`);
+      g.addColorStop(1, `hsl(${hue} 45% 52%)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * 1.05, r * 0.7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = `hsl(${hue} 40% 40%)`;
+      ctx.beginPath();
+      ctx.ellipse(0, r * 0.52, r * 0.9, r * 0.18, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // shell
+      const sx = -facing * r * 0.3;
+      const sy = -r * 0.3;
+      const sr = r * 0.78;
+      ctx.fillStyle = "hsl(36 55% 62%)";
+      ctx.beginPath();
+      ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "hsl(36 45% 46%)";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = "hsl(36 50% 50%)";
+      ctx.lineWidth = 1.5;
+      for (const t of [0.3, 0.55, 0.8]) {
+        ctx.beginPath();
+        ctx.arc(sx, sy, sr * t, Math.PI * 0.9, Math.PI * 1.7);
+        ctx.stroke();
+      }
+    } else if (this.kind === "pigeon") {
+      const g = ctx.createLinearGradient(0, -r, 0, r);
+      g.addColorStop(0, `hsl(${hue} 25% 68%)`);
+      g.addColorStop(1, `hsl(${hue} 25% 50%)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * 1.05, r * 0.85, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // chest highlight
+      ctx.fillStyle = "rgba(255,255,255,0.3)";
+      ctx.beginPath();
+      ctx.ellipse(facing * r * 0.5, r * 0.3, r * 0.5, r * 0.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // iridescent neck patch
+      const ng = ctx.createLinearGradient(0, -r * 0.1, 0, -r * 0.5);
+      ng.addColorStop(0, "#5d9c6a");
+      ng.addColorStop(1, "#7a5fa0");
+      ctx.fillStyle = ng;
+      ctx.beginPath();
+      ctx.ellipse(facing * r * 0.2, -r * 0.28, r * 0.38, r * 0.28, 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      // head
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(facing * r * 0.45, -r * 0.52, r * 0.48, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  drawFace(ctx, facing, blink) {
+    if (this.kind === "bee") {
+      // big black bee-eyes + antennae
+      const r = this.r;
+      ctx.fillStyle = "#1a1d2e";
+      ctx.fillRect(-r * 0.32, -r * 0.05, r * 0.2, r * 0.28);
+      ctx.fillRect(r * 0.12, -r * 0.05, r * 0.2, r * 0.28);
+      ctx.strokeStyle = "#1a1d2e";
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.32, -r * 0.32);
+      ctx.lineTo(-r * 0.42, -r * 0.72);
+      ctx.moveTo(r * 0.32, -r * 0.32);
+      ctx.lineTo(r * 0.42, -r * 0.72);
+      ctx.stroke();
+      ctx.fillStyle = "#1a1d2e";
+      ctx.beginPath();
+      ctx.arc(-r * 0.44, -r * 0.78, r * 0.09, 0, Math.PI * 2);
+      ctx.arc(r * 0.44, -r * 0.78, r * 0.09, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+    if (this.kind === "snail") {
+      // eyestalks with small eyes that retract on blink
+      const r = this.r;
+      const retract = blink ? 0.55 : 1;
+      for (const side of [-1, 1]) {
+        const bx = side * r * 0.42;
+        ctx.strokeStyle = `hsl(${this.hue} 45% 55%)`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(bx, -r * 0.45);
+        ctx.lineTo(bx + side * r * 0.14, -r * 0.9 * retract);
+        ctx.stroke();
+        ctx.fillStyle = blink ? `hsl(${this.hue} 45% 60%)` : "#fff";
+        ctx.beginPath();
+        ctx.arc(bx + side * r * 0.14, -r * 0.95 * retract, r * 0.11, 0, Math.PI * 2);
+        ctx.fill();
+        if (!blink) {
+          ctx.fillStyle = "#1a1d2e";
+          ctx.beginPath();
+          ctx.arc(bx + side * r * 0.14, -r * 0.95 * retract, r * 0.045, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      return;
+    }
+    if (this.kind === "pigeon") {
+      // single forward eye on the head + orange beak
+      const r = this.r;
+      const hx = facing * r * 0.45;
+      const hy = -r * 0.52;
+      if (this.mood === "scared") {
+        ctx.fillStyle = "#fff";
+        ctx.beginPath();
+        ctx.arc(hx + facing * r * 0.1, hy, r * 0.16, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#1a1d2e";
+        ctx.beginPath();
+        ctx.arc(hx + facing * r * 0.1, hy, r * 0.05, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        const closed = this.mood === "happy" || this.mood === "love";
+        ctx.strokeStyle = "#1a1d2e";
+        ctx.lineWidth = 2;
+        if (blink && !closed) ctx.lineWidth = 2.6;
+        ctx.beginPath();
+        if (closed) {
+          ctx.arc(hx + facing * r * 0.08, hy + r * 0.02, r * 0.1, Math.PI, 0);
+        } else {
+          ctx.arc(hx + facing * r * 0.08, hy, r * 0.13, 0, Math.PI * 2);
+        }
+        ctx.stroke();
+      }
+      // beak
+      ctx.fillStyle = "#f5a623";
+      ctx.beginPath();
+      ctx.moveTo(hx + facing * r * 0.24, hy + r * 0.03);
+      ctx.lineTo(hx + facing * r * 0.62, hy + r * 0.12);
+      ctx.lineTo(hx + facing * r * 0.24, hy + r * 0.2);
+      ctx.closePath();
+      ctx.fill();
+      if (this.mood === "scared") {
+        ctx.beginPath();
+        ctx.arc(0, -r * 0.1, r * 0.2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      return;
+    }
+    // default expressive face (critter, squirrel, whale, cat, piglet)
+    const c = this.cfg;
+    const r = this.r;
+    const eyeR = r * c.eyeS;
+    const lx = -r * c.spread;
+    const rx2 = r * c.spread;
+    const ey = r * c.eyS;
+    const ex = facing * r * c.gaze;
+    const open = blink ? 0.12 : 1;
+    const mood = this.mood;
+
+    ctx.strokeStyle = "#1a1d2e";
+    ctx.lineWidth = 2;
+
+    if (mood === "scared") {
+      ctx.fillStyle = "#fff";
+      for (const xx of [lx, rx2]) {
+        ctx.beginPath();
+        ctx.arc(xx, ey, eyeR * 1.15, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = "#1a1d2e";
+      for (const xx of [lx + ex * 0.2, rx2 + ex * 0.2]) {
+        ctx.beginPath();
+        ctx.arc(xx, ey, eyeR * 0.28, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.beginPath();
+      ctx.arc(ex * 0.4 + r * 0.1, r * 0.42, r * 0.16, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (mood === "annoyed") {
+      ctx.fillStyle = "#1a1d2e";
+      for (const xx of [lx, rx2]) {
+        ctx.fillRect(xx - eyeR * 0.55, ey - eyeR * 0.3, eyeR * 1.1, eyeR * 0.9);
+        ctx.strokeRect(xx - eyeR * 0.55, ey - eyeR * 0.3, eyeR * 1.1, eyeR * 0.9);
+      }
+      ctx.beginPath();
+      ctx.moveTo(ex * 0.4 + r * 0.1 - r * 0.2, r * 0.4);
+      ctx.quadraticCurveTo(ex * 0.4 + r * 0.1, r * 0.52, ex * 0.4 + r * 0.1 + r * 0.2, r * 0.4);
+      ctx.stroke();
+      drawSweat(ctx, r * 0.5 + 6, ey - r * 0.05, 6);
+    } else if (mood === "sad") {
+      for (const xx of [lx, rx2]) {
+        ctx.beginPath();
+        ctx.arc(xx, ey + r * 0.12, eyeR * 0.9, Math.PI * 1.05, Math.PI * 1.95);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.arc(ex * 0.4 + r * 0.1, r * 0.52, r * 0.24, Math.PI * 1.15, Math.PI * 1.85);
+      ctx.stroke();
+    } else if (mood === "happy" || mood === "love") {
+      for (const xx of [lx, rx2]) {
+        if (mood === "love") {
+          ctx.fillStyle = "#fff";
+          ctx.beginPath();
+          ctx.arc(xx, ey, eyeR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#1a1d2e";
+          ctx.beginPath();
+          ctx.arc(xx + ex * 0.4, ey, eyeR * 0.44, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.lineWidth = 2.4;
+          ctx.beginPath();
+          ctx.arc(xx, ey + r * 0.05, eyeR * 1.1, Math.PI, 0);
+          ctx.stroke();
+        }
+      }
+      ctx.fillStyle = "rgba(255,120,140,0.4)";
+      ctx.beginPath();
+      ctx.ellipse(lx - eyeR * 0.7, ey + r * 0.32, eyeR * 0.8, eyeR * 0.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(rx2 + eyeR * 0.7, ey + r * 0.32, eyeR * 0.8, eyeR * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#1a1d2e";
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.arc(ex * 0.4 + r * 0.1, r * 0.2, r * 0.3, 0.15 * Math.PI, 0.85 * Math.PI);
+      ctx.stroke();
+      if (mood === "love" && this.fx.some((f) => f.label === "♥")) {
+        drawHeart(ctx, ex * 0.4 + r * 0.1, r * 0.05, 7, "#ff5d8f");
+      }
+    } else {
+      ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.arc(lx, ey, eyeR, 0, Math.PI * 2);
+      ctx.arc(rx2, ey, eyeR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(lx + ex, ey, eyeR * 0.15, 0, Math.PI * 2);
+      ctx.arc(rx2 + ex, ey, eyeR * 0.15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#1a1d2e";
+      ctx.beginPath();
+      ctx.arc(lx + ex * 0.5, ey + (1 - open) * 1.5, eyeR * 0.4, 0, Math.PI * 2);
+      ctx.arc(rx2 + ex * 0.5, ey + (1 - open) * 1.5, eyeR * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#1a1d2e";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(ex * 0.4 + r * 0.1, r * c.myS, r * c.mrS, 0.1 * Math.PI, 0.9 * Math.PI);
+      ctx.stroke();
+      if (blink) {
+        ctx.fillStyle = "#1a1d2e";
+        ctx.fillRect(lx - eyeR + 2, ey + 1, eyeR * 2 - 4, 4);
+        ctx.fillRect(rx2 - eyeR + 2, ey + 1, eyeR * 2 - 4, 4);
+      }
+    }
+  }
+
+  drawFront(ctx, facing) {
+    const r = this.r;
+    if (this.kind === "squirrel") {
+      ctx.fillStyle = `hsl(${this.hue} 55% 40%)`;
+      for (const s of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(s * r * 0.2, -r * 0.5);
+        ctx.lineTo(s * r * 0.52, -r * 0.5);
+        ctx.lineTo(s * r * 0.36, -r * 1.1);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.fillStyle = "#1a1d2e";
+      ctx.beginPath();
+      ctx.arc(facing * r * 0.6, -r * 0.02, r * 0.07, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (this.kind === "cat") {
+      ctx.fillStyle = `hsl(${this.hue} 25% 45%)`;
+      for (const s of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(s * r * 0.2, -r * 0.5);
+        ctx.lineTo(s * r * 0.5, -r * 0.5);
+        ctx.lineTo(s * r * 0.42, -r * 1.12);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,150,160,0.5)";
+        ctx.beginPath();
+        ctx.moveTo(s * r * 0.26, -r * 0.5);
+        ctx.lineTo(s * r * 0.44, -r * 0.5);
+        ctx.lineTo(s * r * 0.4, -r * 1.0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = `hsl(${this.hue} 25% 45%)`;
+      }
+      // whiskers
+      ctx.strokeStyle = "rgba(30,30,30,0.5)";
+      ctx.lineWidth = 1;
+      for (let k = 1; k <= 2; k++) {
+        ctx.beginPath();
+        ctx.moveTo(facing * r * 0.55, k * r * 0.08);
+        ctx.lineTo(facing * r * 1.0, k * r * 0.18);
+        ctx.moveTo(facing * r * 0.55, -k * r * 0.04);
+        ctx.lineTo(facing * r * 1.0, -k * r * 0.14);
+        ctx.stroke();
+      }
+      // nose
+      ctx.fillStyle = "#e07080";
+      ctx.beginPath();
+      ctx.moveTo(facing * r * 0.62, -r * 0.06);
+      ctx.lineTo(facing * r * 0.9, 0);
+      ctx.lineTo(facing * r * 0.62, r * 0.07);
+      ctx.closePath();
+      ctx.fill();
+    } else if (this.kind === "whale") {
+      // pectoral fin
+      ctx.fillStyle = `hsl(${this.hue} 60% 38%)`;
+      ctx.beginPath();
+      ctx.moveTo(facing * r * 0.55, r * 0.15);
+      ctx.quadraticCurveTo(facing * r * 0.85, r * 0.35, facing * r * 0.62, r * 0.62);
+      ctx.quadraticCurveTo(facing * r * 0.42, r * 0.4, facing * r * 0.55, r * 0.15);
+      ctx.closePath();
+      ctx.fill();
+      // blowhole spout
+      const phase = this.t % 9;
+      if (phase < 1.5 && this.mood !== "annoyed" && this.mood !== "scared") {
+        ctx.globalAlpha = 0.8 * (1 - phase / 1.5);
+        ctx.strokeStyle = "#cfe8ff";
+        ctx.lineWidth = 3;
+        for (const dx of [-0.14, 0, 0.14]) {
+          ctx.beginPath();
+          ctx.moveTo(dx * r, -r * 0.95);
+          ctx.quadraticCurveTo(dx * r - r * 0.12, -r * 1.5, dx * r * 0.4, -r * 1.55);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
+    } else if (this.kind === "pigeon") {
+      // folded wings
+      ctx.strokeStyle = `hsl(${this.hue} 25% 42%)`;
+      ctx.lineWidth = r * 0.18;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(0, -r * 0.2);
+      ctx.quadraticCurveTo(facing * r * 0.25, r * 0.1, facing * r * 0.18, r * 0.5);
+      ctx.stroke();
+    } else if (this.kind === "piglet") {
+      // ears
+      ctx.fillStyle = `hsl(${this.hue} 60% 62%)`;
+      for (const s of [-1, 1]) {
+        ctx.beginPath();
+        ctx.ellipse(s * r * 0.42, -r * 0.72, r * 0.2, r * 0.16, s * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // snout
+      ctx.fillStyle = `hsl(${this.hue} 65% 76%)`;
+      ctx.beginPath();
+      ctx.ellipse(facing * r * 0.6, 0, r * 0.34, r * 0.26, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = `hsl(${this.hue} 55% 62%)`;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = "#1a1d2e";
+      ctx.beginPath();
+      ctx.arc(facing * r * 0.72, -r * 0.08, r * 0.06, 0, Math.PI * 2);
+      ctx.arc(facing * r * 0.72, r * 0.08, r * 0.06, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  drawFeet(ctx, facing) {
+    const r = this.r;
+    ctx.strokeStyle = `hsl(${this.hue} 70% 30%)`;
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    const step = this.mood === "scared" || this.mood === "annoyed" ? Math.sin(this.t * 18) * 6 : Math.sin(this.t * 10) * 4;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.4, r * 0.75);
+    ctx.lineTo(-r * 0.4 + step, r * 0.95);
+    ctx.moveTo(r * 0.4, r * 0.75);
+    ctx.lineTo(r * 0.4 - step, r * 0.95);
+    ctx.stroke();
   }
 }

@@ -1,5 +1,5 @@
 import "./style.css";
-import { Pet } from "./pet.js";
+import { Pet, KINDS } from "./pet.js";
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
@@ -14,9 +14,13 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
+const kinds = Object.keys(KINDS);
+const randomKind = () => kinds[(Math.random() * kinds.length) | 0];
+const makeHue = (kind) => KINDS[kind].hue + Math.random() * 30 - 15;
+
 const pets = [
-  new Pet(ctx, { x: W * 0.3, y: H * 0.6, hue: 150, speed: 1.0 }),
-  new Pet(ctx, { x: W * 0.7, y: H * 0.4, hue: 275, speed: 1.0 }),
+  new Pet(ctx, { x: W * 0.3, y: H * 0.6, kind: randomKind() }),
+  new Pet(ctx, { x: W * 0.7, y: H * 0.4, kind: randomKind() }),
 ];
 
 let last = performance.now();
@@ -36,8 +40,12 @@ const removeBtn = document.getElementById("remove");
 const speedBtn = document.getElementById("speed");
 let running = true;
 
+const kindSelect = document.getElementById("kind");
+
 addBtn.addEventListener("click", () => {
-  pets.push(new Pet(ctx, { x: W / 2 + Math.random() * 80 - 40, y: H / 2, hue: Math.random() * 360 }));
+  const pick = kindSelect.value;
+  const kind = pick === "random" ? randomKind() : pick;
+  pets.push(new Pet(ctx, { x: W / 2 + Math.random() * 80 - 40, y: H / 2, kind, hue: makeHue(kind) }));
 });
 removeBtn.addEventListener("click", () => {
   if (pets.length <= 2) return;
