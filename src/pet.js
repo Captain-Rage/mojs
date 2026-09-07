@@ -18,6 +18,7 @@
  */
 
 const NEAR = 130; // px: creatures sense each other within this range
+const DISTANT = 170; // px: avoidance zone after a meeting
 const BUMP = 52; // px: considered a collision (two radii + a little)
 const CONTACT = 88; // px: standing together / holding a meeting
 
@@ -70,6 +71,10 @@ export class Pet {
     this.partner = null;
     this.cooldown = 0; // seconds of avoidance after a meeting ends
     this.wasMeeting = false;
+    this.meetingTime = 0; // seconds spent in the current meeting (never resets mid-meeting)
+    this.escape = 0; // seconds of forced sprint away after a collision
+    this.escapeAngle = 0;
+    this.sinceMeeting = 99; // seconds spent outside a meeting
   }
 
   setMood(m) {
@@ -128,17 +133,27 @@ export class Pet {
     if (bump && this.mood !== "scared") {
       this.setMood("scared");
       this.partner = other;
-      // hop away from the collision
-      this.angle = Math.atan2(this.y - other.y, this.x - other.x);
-      this.recoil = 0.9;
+      // sprint away from the collision for a fixed time; guaranteed to part
+      this.escape = 0.9;
+      this.escapeAngle = Math.atan2(this.y - other.y, this.x - other.x);
+      this.emit("!");
     } else if (contact) {
+      const startMeeting = !this.wasMeeting && this.sinceMeeting > 1;
       this.partner = other;
       this.wasMeeting = true;
-      if (this.moodTime > 6.5) this.setMood("annoyed");
-      else if (this.moodTime > 3.2) this.setMood("love");
-      else if (this.moodTime > 1) this.setMood("happy");
+      if (startMeeting) {
+        this.meetingTime = 0;
+        // quick re-meet after a parting: escalate the avoidance so pairs
+        // can't fall into an endless "meet again" loop
+        if (this.sinceMeeting < 8) this.cooldown = Math.min(this.cooldown + 6, 25);
+      }
+      this.meetingTime += dt;
+      if (this.meetingTime > 6.5) this.setMood("annoyed");
+      else if (this.meetingTime > 3.2) this.setMood("love");
+      else if (this.meetingTime > 1) this.setMood("happy");
       else this.setMood("curious");
     } else {
+      this.sinceMeeting += dt;
       const parting = this.wasMeeting;
       this.wasMeeting = false;
       this.partner = null;
@@ -147,7 +162,8 @@ export class Pet {
       }
       if (parting) {
         // meeting just ended: pick a fresh direction and keep apart for a while
-        this.cooldown = 4 + Math.random() * 3;
+        this.sinceMeeting = 0;
+        this.cooldown = 6 + Math.random() * 3;
         this.angle = Math.random() * Math.PI * 2;
       }
       if (this.aloneFor > 11 && this.mood !== "sad") {
@@ -203,9 +219,15 @@ export class Pet {
       }
     } else if (this.mood === "scared") {
       speed = this.spd * 1.8;
-      this.recoil = Math.max(0, (this.recoil || 0) - dt);
-      if (this.moodTime > 1.1 || this.recoil <= 0) this.setMood("wander");
-      if (this.moodTime < 0.1) this.emit("!");
+      if (this.escape > 0) {
+        // keep sprinting away; jitter only slightly so we stay on course
+        this.escapeAngle += (Math.random() - 0.5) * 0.08;
+        this.escape -= dt;
+      } else {
+        // collision fully resolved: calm down and stay clear for a moment
+        this.setMood("wander");
+        this.cooldown = 3 + Math.random() * 2;
+      }
     } else if (this.mood === "sad") {
       speed = this.spd * 0.5;
       if (this.sinceTalk > 2) {
@@ -213,8 +235,8 @@ export class Pet {
         this.emit("💧");
       }
     } else {
-      // wander: gentle drift, occasional stops
-      if (Math.random() < dt * 0.8) steer += (Math.random() - 0.5) * 1.2;
+      // wander: gentle curved drift, occasional stops
+      if (Math.random() < dt * 1.6) steer += (Math.random() - 0.5) * 1.4;
     }
     steer += Math.sin(this.t * 0.6) * dt * 0.4;
 
@@ -224,20 +246,29 @@ export class Pet {
     }
 
     // ---- separation: never stack, and avoid each other during cooldown --
-    if (other) {
-      if (d < BUMP && d > 0) {
+    for (const q of pets) {
+      if (q === this) continue;
+      const dq = Math.hypot(q.x - this.x, q.y - this.y);
+      if (dq < BUMP && dq > 0) {
         // physically push overlapping bodies apart so they can't stay glued
-        const push = ((BUMP - d) / BUMP) * this.spd * dt * 2.2;
-        this.x += ((this.x - other.x) / d) * push;
-        this.y += ((this.y - other.y) / d) * push;
+        const push = ((BUMP - dq) / BUMP) * this.spd * dt * 1.6;
+        this.x += ((this.x - q.x) / dq) * push;
+        this.y += ((this.y - q.y) / dq) * push;
       }
-      if (this.cooldown > 0 && d < NEAR) {
-        // after a meeting, turn and walk the other way for a moment
-        this.angle = Math.atan2(this.y - other.y, this.x - other.x) + (Math.random() - 0.5) * 0.7;
+    }
+    if (other && this.cooldown > 0 && d < DISTANT && (this.mood === "wander" || this.mood === "sad")) {
+      // after a meeting, turn the other way, walk briskly, and stay clear
+      this.angle = Math.atan2(this.y - other.y, this.x - other.x) + (Math.random() - 0.5) * 0.7;
+      if (this.mood === "wander" || this.mood === "happy" || this.mood === "curious") {
+        speed = Math.max(speed, this.spd * 1.15);
       }
     }
 
-    this.angle += steer;
+    if (this.escape > 0) {
+      this.angle = this.escapeAngle; // sprint wins over any other steering
+    } else {
+      this.angle += steer;
+    }
     this.x += Math.cos(this.angle) * speed * dt;
     this.y += Math.sin(this.angle) * speed * dt + Math.sin(this.t * 2) * 7 * bob * dt * (bob > 1 ? 2 : 1);
 
