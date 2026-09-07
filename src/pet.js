@@ -353,27 +353,39 @@ export class Pet {
   drawBack(ctx, facing) {
     const r = this.r;
     if (this.kind === "squirrel") {
-      // big fluffy tail sweeping up behind
+      // big bushy tail sweeping up and over the back, well above the head
       ctx.save();
-      ctx.translate(-facing * r * 0.95, -r * 0.7);
-      ctx.rotate(-facing * 0.8);
-      const g = ctx.createLinearGradient(0, -r * 0.7, 0, r * 0.7);
-      g.addColorStop(0, `hsl(${this.hue} 45% 64%)`);
-      g.addColorStop(1, `hsl(${this.hue} 60% 40%)`);
+      ctx.scale(facing, 1);
+      const g = ctx.createLinearGradient(0, -r * 1.7, 0, r * 0.4);
+      g.addColorStop(0, `hsl(${this.hue} 40% 62%)`);
+      g.addColorStop(1, `hsl(${this.hue} 55% 40%)`);
       ctx.fillStyle = g;
       ctx.beginPath();
-      ctx.ellipse(0, 0, r * 0.5, r * 0.85, 0, 0, Math.PI * 2);
+      ctx.moveTo(-r * 0.55, r * 0.15);
+      ctx.quadraticCurveTo(-r * 1.3, -r * 0.15, -r * 1.05, -r * 0.8);
+      ctx.quadraticCurveTo(-r * 0.85, -r * 1.55, -r * 0.25, -r * 1.7);
+      ctx.quadraticCurveTo(r * 0.15, -r * 1.8, r * 0.35, -r * 1.35);
+      ctx.quadraticCurveTo(-r * 0.05, -r * 1.15, -r * 0.4, -r * 0.85);
+      ctx.quadraticCurveTo(-r * 0.8, -r * 0.3, -r * 0.55, r * 0.15);
+      ctx.closePath();
       ctx.fill();
-      // fluffy tip tuft
-      ctx.fillStyle = `hsl(${this.hue} 50% 52%)`;
-      for (const t of [-0.45, 0, 0.45]) {
+      // ragged fluff along the outer sweep
+      ctx.fillStyle = `hsl(${this.hue} 45% 52%)`;
+      for (const [px, py] of [
+        [-r * 0.95, -r * 0.4],
+        [-r * 0.9, -r * 1.0],
+        [-r * 0.55, -r * 1.5],
+        [-r * 0.05, -r * 1.6],
+        [r * 0.25, -r * 1.45],
+      ]) {
         ctx.beginPath();
-        ctx.arc(t * r * 0.3, -r * 0.72, r * 0.3, 0, Math.PI * 2);
+        ctx.arc(px, py, r * 0.26, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.fillStyle = "rgba(255,255,255,0.2)";
+      // light highlight where the tail curls
+      ctx.fillStyle = "rgba(255,255,255,0.22)";
       ctx.beginPath();
-      ctx.arc(-r * 0.1, -r * 0.5, r * 0.22, 0, Math.PI * 2);
+      ctx.arc(-r * 0.35, -r * 1.25, r * 0.22, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     } else if (this.kind === "bee") {
@@ -449,25 +461,35 @@ export class Pet {
       ctx.ellipse(-r * 0.2, -r * 0.35, r * 0.45, r * 0.3, -0.4, 0, Math.PI * 2);
       ctx.fill();
     } else if (this.kind === "squirrel") {
-      // arched, leaping-ready body with a light belly
-      const g = ctx.createLinearGradient(0, -r * 1.1, 0, r * 1.1);
-      g.addColorStop(0, `hsl(${hue} 55% 66%)`);
-      g.addColorStop(1, `hsl(${hue} 50% 44%)`);
+      // sitting squirrel: rounded head, big haunch, neat chest
+      ctx.save();
+      ctx.scale(facing, 1);
+      const g = ctx.createLinearGradient(0, -r * 1.15, 0, r * 1.1);
+      g.addColorStop(0, `hsl(${hue} 52% 68%)`);
+      g.addColorStop(0.62, `hsl(${hue} 48% 52%)`);
+      g.addColorStop(1, `hsl(${hue} 44% 42%)`);
       ctx.fillStyle = g;
+      // back half / haunch
       ctx.beginPath();
-      ctx.ellipse(0, 0, r * 0.9, r * 1.12, 0, 0, Math.PI * 2);
+      ctx.ellipse(-r * 0.28, r * 0.2, r * 0.82, r * 0.92, 0, 0, Math.PI * 2);
       ctx.fill();
-      const bg = ctx.createLinearGradient(facing * r * 0.2, 0, facing * r * 0.9, 0);
-      bg.addColorStop(0, "rgba(255,240,215,0.85)");
+      // chest
+      ctx.beginPath();
+      ctx.ellipse(r * 0.38, r * 0.42, r * 0.52, r * 0.56, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // head on top of the chest
+      ctx.beginPath();
+      ctx.ellipse(r * 0.12, -r * 0.08, r * 0.55, r * 0.58, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // pale belly on the chest
+      const bg = ctx.createLinearGradient(r * 0.05, 0, r * 0.7, 0);
+      bg.addColorStop(0, "rgba(255,240,215,0.9)");
       bg.addColorStop(1, "rgba(255,240,215,0)");
       ctx.fillStyle = bg;
       ctx.beginPath();
-      ctx.ellipse(facing * r * 0.5, r * 0.18, r * 0.5, r * 0.62, 0, 0, Math.PI * 2);
+      ctx.ellipse(r * 0.32, r * 0.48, r * 0.4, r * 0.5, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "rgba(255,255,255,0.16)";
-      ctx.beginPath();
-      ctx.ellipse(-facing * r * 0.22, -r * 0.52, r * 0.38, r * 0.26, -0.35, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.restore();
     } else if (this.kind === "cat") {
       // round tabby body with back stripes and a muzzle patch
       const g = ctx.createLinearGradient(0, -r, 0, r);
@@ -819,29 +841,34 @@ export class Pet {
   drawFront(ctx, facing) {
     const r = this.r;
     if (this.kind === "squirrel") {
-      // rounded ears with a warm inner ear
-      ctx.fillStyle = `hsl(${this.hue} 50% 46%)`;
-      for (const s of [-1, 1]) {
+      // two tall ears rising from the back of the head, with a warm inner ear
+      ctx.save();
+      ctx.scale(facing, 1);
+      for (const [bx, tipx, tipy] of [
+        [-r * 0.12, -r * 0.28, -r * 1.55],
+        [r * 0.2, r * 0.06, -r * 1.45],
+      ]) {
+        ctx.fillStyle = `hsl(${this.hue} 45% 46%)`;
         ctx.beginPath();
-        ctx.moveTo(s * r * 0.16, -r * 0.8);
-        ctx.quadraticCurveTo(s * r * 0.4, -r * 1.3, s * r * 0.6, -r * 0.92);
-        ctx.quadraticCurveTo(s * r * 0.42, -r * 0.94, s * r * 0.16, -r * 0.8);
+        ctx.moveTo(bx, -r * 0.3);
+        ctx.quadraticCurveTo(bx - r * 0.18, -r * 0.9, tipx, tipy);
+        ctx.quadraticCurveTo(bx + r * 0.28, -r * 0.75, bx + r * 0.22, -r * 0.3);
         ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = "rgba(255,210,190,0.5)";
+        ctx.fillStyle = "rgba(255,215,195,0.6)";
         ctx.beginPath();
-        ctx.moveTo(s * r * 0.26, -r * 0.86);
-        ctx.quadraticCurveTo(s * r * 0.4, -r * 1.14, s * r * 0.55, -r * 0.94);
-        ctx.quadraticCurveTo(s * r * 0.42, -r * 0.96, s * r * 0.26, -r * 0.86);
+        ctx.moveTo(bx + r * 0.05, -r * 0.38);
+        ctx.quadraticCurveTo(bx - r * 0.08, -r * 0.85, tipx + r * 0.05, tipy + r * 0.12);
+        ctx.quadraticCurveTo(bx + r * 0.2, -r * 0.68, bx + r * 0.17, -r * 0.38);
         ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = `hsl(${this.hue} 50% 46%)`;
       }
       // tiny nose
       ctx.fillStyle = "#1a1d2e";
       ctx.beginPath();
-      ctx.arc(facing * r * 0.62, -r * 0.02, r * 0.07, 0, Math.PI * 2);
+      ctx.arc(r * 0.62, -r * 0.02, r * 0.07, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
     } else if (this.kind === "cat") {
       // pointy ears with inner pink
       for (const s of [-1, 1]) {
