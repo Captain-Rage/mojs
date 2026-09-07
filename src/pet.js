@@ -395,16 +395,21 @@ export class Pet {
       ctx.ellipse(r * 0.42, -r * 0.55, r * 0.3, r * 0.55, -0.4, 0, Math.PI * 2);
       ctx.fill();
     } else if (this.kind === "whale") {
-      const bx = -facing * r * 1.0;
-      ctx.fillStyle = `hsl(${this.hue} 60% 36%)`;
+      // horizontal tail flukes sweeping wide behind the peduncle
+      ctx.save();
+      ctx.scale(facing, 1);
+      ctx.fillStyle = `hsl(${this.hue} 50% 38%)`;
       ctx.beginPath();
-      ctx.moveTo(bx, -r * 0.15);
-      ctx.lineTo(bx - facing * r * 0.5, -r * 0.62);
-      ctx.lineTo(bx - facing * r * 0.18, 0);
-      ctx.lineTo(bx - facing * r * 0.5, r * 0.62);
-      ctx.lineTo(bx, r * 0.15);
+      ctx.moveTo(-r * 1.3, 0);
+      ctx.quadraticCurveTo(-r * 1.0, -r * 0.12, -r * 0.55, -r * 0.6);
+      ctx.quadraticCurveTo(-r * 0.3, -r * 0.55, -r * 0.3, -r * 0.2);
+      ctx.quadraticCurveTo(-r * 0.55, -r * 0.05, -r * 0.55, 0);
+      ctx.quadraticCurveTo(-r * 0.55, r * 0.05, -r * 0.3, r * 0.2);
+      ctx.quadraticCurveTo(-r * 0.3, r * 0.55, -r * 0.55, r * 0.6);
+      ctx.quadraticCurveTo(-r * 1.0, r * 0.12, -r * 1.3, 0);
       ctx.closePath();
       ctx.fill();
+      ctx.restore();
     } else if (this.kind === "cat") {
       // tapered tail curving up behind with a dunk-dark tip
       const tx = -facing * r * 1.35;
@@ -545,17 +550,41 @@ export class Pet {
       ctx.ellipse(0, 0, r, r * 0.82, 0, 0, Math.PI * 2);
       ctx.stroke();
     } else if (this.kind === "whale") {
-      const g = ctx.createLinearGradient(0, -r, 0, r);
-      g.addColorStop(0, `hsl(${hue} 60% 62%)`);
-      g.addColorStop(1, `hsl(${hue} 65% 42%)`);
+      // baleen whale: broad head, tapered peduncle, ventral pleats
+      ctx.save();
+      ctx.scale(facing, 1);
+      const g = ctx.createLinearGradient(0, -r * 0.95, 0, r * 0.95);
+      g.addColorStop(0, `hsl(${hue} 52% 50%)`);
+      g.addColorStop(0.55, `hsl(${hue} 55% 48%)`);
+      g.addColorStop(0.65, `hsl(${hue} 68% 72%)`);
+      g.addColorStop(1, `hsl(${hue} 60% 66%)`);
       ctx.fillStyle = g;
       ctx.beginPath();
-      ctx.ellipse(0, 0, r * 1.2, r * 0.9, 0, 0, Math.PI * 2);
+      ctx.moveTo(r * 0.88, r * 0.18);
+      ctx.quadraticCurveTo(r * 1.0, -r * 0.12, r * 0.55, -r * 0.55);
+      ctx.quadraticCurveTo(r * 0.1, -r * 0.82, -r * 0.35, -r * 0.68);
+      ctx.quadraticCurveTo(-r * 0.7, -r * 0.55, -r * 1.0, -r * 0.22);
+      ctx.quadraticCurveTo(-r * 1.22, -r * 0.1, -r * 1.32, 0);
+      ctx.quadraticCurveTo(-r * 1.22, r * 0.1, -r * 1.0, r * 0.22);
+      ctx.quadraticCurveTo(-r * 0.5, r * 0.75, r * 0.0, r * 0.78);
+      ctx.quadraticCurveTo(r * 0.5, r * 0.68, r * 0.88, r * 0.18);
+      ctx.closePath();
       ctx.fill();
-      ctx.fillStyle = `hsl(${hue} 70% 78%)`;
+      // small dorsal bump
+      ctx.fillStyle = `hsl(${hue} 52% 42%)`;
       ctx.beginPath();
-      ctx.ellipse(r * 0.3, r * 0.42, r * 0.8, r * 0.42, 0, 0, Math.PI * 2);
+      ctx.ellipse(-r * 0.5, -r * 0.66, r * 0.12, r * 0.2, -0.3, 0, Math.PI * 2);
       ctx.fill();
+      // ventral pleats (grooves from chin to belly)
+      ctx.strokeStyle = `hsl(${hue} 58% 42%)`;
+      ctx.lineWidth = 1.2;
+      for (const f of [0, 0.12, 0.24]) {
+        ctx.beginPath();
+        ctx.moveTo(r * 0.68, r * (0.38 + f));
+        ctx.quadraticCurveTo(r * 0.1, r * (0.6 + f * 0.7), -r * 0.45, r * (0.56 + f * 0.8));
+        ctx.stroke();
+      }
+      ctx.restore();
     } else if (this.kind === "snail") {
       // soft wet foot with a front head bump
       const g = ctx.createLinearGradient(0, -r * 0.5, 0, r);
@@ -907,12 +936,14 @@ export class Pet {
       ctx.closePath();
       ctx.fill();
     } else if (this.kind === "whale") {
-      // pectoral fin
-      ctx.fillStyle = `hsl(${this.hue} 60% 38%)`;
+      // long pectoral fin, humpback-style, drooping down
+      ctx.save();
+      ctx.scale(facing, 1);
+      ctx.fillStyle = `hsl(${this.hue} 52% 40%)`;
       ctx.beginPath();
-      ctx.moveTo(facing * r * 0.55, r * 0.15);
-      ctx.quadraticCurveTo(facing * r * 0.85, r * 0.35, facing * r * 0.62, r * 0.62);
-      ctx.quadraticCurveTo(facing * r * 0.42, r * 0.4, facing * r * 0.55, r * 0.15);
+      ctx.moveTo(r * 0.35, r * 0.1);
+      ctx.quadraticCurveTo(r * 0.58, r * 0.55, r * 0.48, r * 0.95);
+      ctx.quadraticCurveTo(r * 0.32, r * 0.7, r * 0.25, r * 0.3);
       ctx.closePath();
       ctx.fill();
       // blowhole spout
@@ -929,6 +960,7 @@ export class Pet {
         }
         ctx.globalAlpha = 1;
       }
+      ctx.restore();
     } else if (this.kind === "pigeon") {
       // folded wings
       ctx.strokeStyle = `hsl(${this.hue} 25% 42%)`;
