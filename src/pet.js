@@ -353,19 +353,27 @@ export class Pet {
   drawBack(ctx, facing) {
     const r = this.r;
     if (this.kind === "squirrel") {
+      // big fluffy tail sweeping up behind
       ctx.save();
-      ctx.translate(-facing * r * 1.05, -r * 0.1);
-      ctx.rotate(-facing * 0.55);
+      ctx.translate(-facing * r * 0.95, -r * 0.7);
+      ctx.rotate(-facing * 0.8);
       const g = ctx.createLinearGradient(0, -r * 0.7, 0, r * 0.7);
-      g.addColorStop(0, `hsl(${this.hue} 55% 52%)`);
-      g.addColorStop(1, `hsl(${this.hue} 60% 36%)`);
+      g.addColorStop(0, `hsl(${this.hue} 45% 64%)`);
+      g.addColorStop(1, `hsl(${this.hue} 60% 40%)`);
       ctx.fillStyle = g;
       ctx.beginPath();
-      ctx.ellipse(0, 0, r * 0.5, r * 0.8, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, r * 0.5, r * 0.85, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "rgba(255,255,255,0.18)";
+      // fluffy tip tuft
+      ctx.fillStyle = `hsl(${this.hue} 50% 52%)`;
+      for (const t of [-0.45, 0, 0.45]) {
+        ctx.beginPath();
+        ctx.arc(t * r * 0.3, -r * 0.72, r * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = "rgba(255,255,255,0.2)";
       ctx.beginPath();
-      ctx.ellipse(-r * 0.08, -r * 0.25, r * 0.3, r * 0.45, 0.2, 0, Math.PI * 2);
+      ctx.arc(-r * 0.1, -r * 0.5, r * 0.22, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     } else if (this.kind === "bee") {
@@ -386,20 +394,32 @@ export class Pet {
       ctx.closePath();
       ctx.fill();
     } else if (this.kind === "cat") {
-      ctx.strokeStyle = `hsl(${this.hue} 25% 52%)`;
-      ctx.lineWidth = r * 0.32;
-      ctx.lineCap = "round";
+      // tapered tail curving up behind with a dunk-dark tip
+      const tx = -facing * r * 1.35;
+      const ty = -r * 0.28;
+      ctx.fillStyle = `hsl(${this.hue} 30% 50%)`;
       ctx.beginPath();
-      ctx.moveTo(-facing * r * 0.85, r * 0.2);
-      ctx.quadraticCurveTo(-facing * r * 1.45, r * 0.15, -facing * r * 1.25, -r * 0.35);
-      ctx.stroke();
+      ctx.moveTo(-facing * r * 0.6, r * 0.12);
+      ctx.quadraticCurveTo(-facing * r * 1.35, r * 0.05, tx, ty);
+      ctx.quadraticCurveTo(-facing * r * 1.28, r * 0.28, -facing * r * 0.75, r * 0.42);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = `hsl(${this.hue} 30% 36%)`;
+      ctx.beginPath();
+      ctx.arc(tx, ty + r * 0.06, r * 0.15, 0, Math.PI * 2);
+      ctx.fill();
     } else if (this.kind === "piglet") {
-      ctx.strokeStyle = `hsl(${this.hue} 55% 62%)`;
+      // curly corkscrew tail
+      ctx.save();
+      ctx.translate(-facing * r * 1.0, -r * 0.25);
+      ctx.rotate(-facing * 0.4);
+      ctx.strokeStyle = `hsl(${this.hue} 55% 55%)`;
       ctx.lineWidth = r * 0.16;
       ctx.lineCap = "round";
       ctx.beginPath();
-      ctx.arc(-facing * r * 1.0, -r * 0.1, r * 0.26, 0.6, Math.PI * 1.4);
+      ctx.arc(0, 0, r * 0.3, Math.PI * 0.7, Math.PI * 4.4);
       ctx.stroke();
+      ctx.restore();
     } else if (this.kind === "pigeon") {
       ctx.fillStyle = `hsl(${this.hue} 20% 55%)`;
       for (const dy of [-0.12, 0.05, 0.22]) {
@@ -416,7 +436,7 @@ export class Pet {
   drawBody(ctx, facing) {
     const r = this.r;
     const hue = this.hue;
-    if (this.kind === "critter" || this.kind === "squirrel" || this.kind === "cat" || this.kind === "piglet") {
+    if (this.kind === "critter") {
       const g = ctx.createLinearGradient(0, -r, 0, r);
       g.addColorStop(0, `hsl(${hue} 70% 68%)`);
       g.addColorStop(1, `hsl(${hue} 70% 44%)`);
@@ -427,6 +447,61 @@ export class Pet {
       ctx.fillStyle = "rgba(255,255,255,0.25)";
       ctx.beginPath();
       ctx.ellipse(-r * 0.2, -r * 0.35, r * 0.45, r * 0.3, -0.4, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (this.kind === "squirrel") {
+      // arched, leaping-ready body with a light belly
+      const g = ctx.createLinearGradient(0, -r * 1.1, 0, r * 1.1);
+      g.addColorStop(0, `hsl(${hue} 55% 66%)`);
+      g.addColorStop(1, `hsl(${hue} 50% 44%)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * 0.9, r * 1.12, 0, 0, Math.PI * 2);
+      ctx.fill();
+      const bg = ctx.createLinearGradient(facing * r * 0.2, 0, facing * r * 0.9, 0);
+      bg.addColorStop(0, "rgba(255,240,215,0.85)");
+      bg.addColorStop(1, "rgba(255,240,215,0)");
+      ctx.fillStyle = bg;
+      ctx.beginPath();
+      ctx.ellipse(facing * r * 0.5, r * 0.18, r * 0.5, r * 0.62, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.16)";
+      ctx.beginPath();
+      ctx.ellipse(-facing * r * 0.22, -r * 0.52, r * 0.38, r * 0.26, -0.35, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (this.kind === "cat") {
+      // round tabby body with back stripes and a muzzle patch
+      const g = ctx.createLinearGradient(0, -r, 0, r);
+      g.addColorStop(0, `hsl(${hue} 28% 64%)`);
+      g.addColorStop(1, `hsl(${hue} 30% 44%)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * 0.98, r * 0.92, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = `hsl(${hue} 30% 36%)`;
+      for (const oy of [-0.32, 0, 0.32]) {
+        ctx.beginPath();
+        ctx.ellipse(-facing * r * 0.42, oy * r, r * 0.16, r * 0.07, facing * 0.35, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      const mg = ctx.createLinearGradient(facing * r * 0.2, 0, facing * r * 0.95, 0);
+      mg.addColorStop(0, "rgba(255,250,240,0.95)");
+      mg.addColorStop(1, "rgba(255,250,240,0)");
+      ctx.fillStyle = mg;
+      ctx.beginPath();
+      ctx.ellipse(facing * r * 0.55, 0, r * 0.48, r * 0.55, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (this.kind === "piglet") {
+      // plump round pig body with a pale belly
+      const g = ctx.createLinearGradient(0, -r, 0, r);
+      g.addColorStop(0, `hsl(${hue} 60% 74%)`);
+      g.addColorStop(1, `hsl(${hue} 55% 60%)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * 1.04, r * 0.96, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,230,240,0.6)";
+      ctx.beginPath();
+      ctx.ellipse(0, r * 0.3, r * 0.7, r * 0.5, 0, 0, Math.PI * 2);
       ctx.fill();
     } else if (this.kind === "bee") {
       ctx.save();
@@ -460,38 +535,51 @@ export class Pet {
       ctx.ellipse(r * 0.3, r * 0.42, r * 0.8, r * 0.42, 0, 0, Math.PI * 2);
       ctx.fill();
     } else if (this.kind === "snail") {
-      // foot
+      // soft wet foot with a front head bump
       const g = ctx.createLinearGradient(0, -r * 0.5, 0, r);
-      g.addColorStop(0, `hsl(${hue} 45% 70%)`);
-      g.addColorStop(1, `hsl(${hue} 45% 52%)`);
+      g.addColorStop(0, `hsl(${hue} 42% 74%)`);
+      g.addColorStop(1, `hsl(${hue} 42% 55%)`);
       ctx.fillStyle = g;
       ctx.beginPath();
-      ctx.ellipse(0, 0, r * 1.05, r * 0.7, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, r * 0.05, r * 1.08, r * 0.62, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = `hsl(${hue} 40% 40%)`;
+      ctx.fillStyle = `hsl(${hue} 42% 68%)`;
       ctx.beginPath();
-      ctx.ellipse(0, r * 0.52, r * 0.9, r * 0.18, 0, 0, Math.PI * 2);
+      ctx.ellipse(facing * r * 0.55, r * 0.02, r * 0.48, r * 0.52, 0, 0, Math.PI * 2);
       ctx.fill();
-      // shell
-      const sx = -facing * r * 0.3;
-      const sy = -r * 0.3;
-      const sr = r * 0.78;
-      ctx.fillStyle = "hsl(36 55% 62%)";
-      ctx.beginPath();
-      ctx.arc(sx, sy, sr, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "hsl(36 45% 46%)";
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.arc(sx, sy, sr, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.strokeStyle = "hsl(36 50% 50%)";
+      // ripples along the foot fringe
+      ctx.strokeStyle = `hsl(${hue} 35% 48%)`;
       ctx.lineWidth = 1.5;
-      for (const t of [0.3, 0.55, 0.8]) {
+      for (const dx of [-0.6, -0.2, 0.2, 0.6]) {
         ctx.beginPath();
-        ctx.arc(sx, sy, sr * t, Math.PI * 0.9, Math.PI * 1.7);
+        ctx.arc(dx * r, r * 0.52, r * 0.2, Math.PI * 1.1, Math.PI * 1.9);
         ctx.stroke();
       }
+      // spiral shell riding on the back
+      const sx = -facing * r * 0.4;
+      const sy = -r * 0.3;
+      const sr = r * 0.8;
+      const sg = ctx.createRadialGradient(sx - sr * 0.35, sy - sr * 0.35, sr * 0.08, sx, sy, sr);
+      sg.addColorStop(0, "hsl(34 60% 74%)");
+      sg.addColorStop(1, "hsl(32 55% 50%)");
+      ctx.fillStyle = sg;
+      ctx.beginPath();
+      ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "hsl(30 50% 42%)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.strokeStyle = "hsl(32 48% 40%)";
+      ctx.lineWidth = 1.8;
+      for (const t of [0.26, 0.48, 0.7]) {
+        ctx.beginPath();
+        ctx.arc(sx, sy, sr * t, Math.PI * 0.85, Math.PI * 1.8);
+        ctx.stroke();
+      }
+      ctx.fillStyle = "rgba(255,255,255,0.32)";
+      ctx.beginPath();
+      ctx.ellipse(sx - sr * 0.3, sy - sr * 0.32, sr * 0.3, sr * 0.18, -0.6, 0, Math.PI * 2);
+      ctx.fill();
     } else if (this.kind === "pigeon") {
       const g = ctx.createLinearGradient(0, -r, 0, r);
       g.addColorStop(0, `hsl(${hue} 25% 68%)`);
@@ -548,24 +636,33 @@ export class Pet {
       const r = this.r;
       const retract = blink ? 0.55 : 1;
       for (const side of [-1, 1]) {
-        const bx = side * r * 0.42;
-        ctx.strokeStyle = `hsl(${this.hue} 45% 55%)`;
-        ctx.lineWidth = 2.5;
+        const bx = side * r * 0.4;
+        const tx = bx + side * r * 0.16;
+        const ty = -r * 0.92 * retract;
+        ctx.strokeStyle = `hsl(${this.hue} 40% 58%)`;
+        ctx.lineWidth = 2.6;
+        ctx.lineCap = "round";
         ctx.beginPath();
-        ctx.moveTo(bx, -r * 0.45);
-        ctx.lineTo(bx + side * r * 0.14, -r * 0.9 * retract);
+        ctx.moveTo(bx, -r * 0.4);
+        ctx.quadraticCurveTo(bx + side * r * 0.24, -r * 0.72, tx, ty);
         ctx.stroke();
-        ctx.fillStyle = blink ? `hsl(${this.hue} 45% 60%)` : "#fff";
+        ctx.fillStyle = blink ? `hsl(${this.hue} 42% 62%)` : "#fff";
         ctx.beginPath();
-        ctx.arc(bx + side * r * 0.14, -r * 0.95 * retract, r * 0.11, 0, Math.PI * 2);
+        ctx.arc(tx, ty - r * 0.03, r * 0.12, 0, Math.PI * 2);
         ctx.fill();
         if (!blink) {
           ctx.fillStyle = "#1a1d2e";
           ctx.beginPath();
-          ctx.arc(bx + side * r * 0.14, -r * 0.95 * retract, r * 0.045, 0, Math.PI * 2);
+          ctx.arc(tx, ty - r * 0.03, r * 0.05, 0, Math.PI * 2);
           ctx.fill();
         }
       }
+      // little smile
+      ctx.strokeStyle = "#1a1d2e";
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(facing * r * 0.3, r * 0.18, r * 0.16, 0.15 * Math.PI, 0.85 * Math.PI);
+      ctx.stroke();
       return;
     }
     if (this.kind === "pigeon") {
@@ -722,36 +819,46 @@ export class Pet {
   drawFront(ctx, facing) {
     const r = this.r;
     if (this.kind === "squirrel") {
-      ctx.fillStyle = `hsl(${this.hue} 55% 40%)`;
+      // rounded ears with a warm inner ear
+      ctx.fillStyle = `hsl(${this.hue} 50% 46%)`;
       for (const s of [-1, 1]) {
         ctx.beginPath();
-        ctx.moveTo(s * r * 0.2, -r * 0.5);
-        ctx.lineTo(s * r * 0.52, -r * 0.5);
-        ctx.lineTo(s * r * 0.36, -r * 1.1);
+        ctx.moveTo(s * r * 0.16, -r * 0.8);
+        ctx.quadraticCurveTo(s * r * 0.4, -r * 1.3, s * r * 0.6, -r * 0.92);
+        ctx.quadraticCurveTo(s * r * 0.42, -r * 0.94, s * r * 0.16, -r * 0.8);
         ctx.closePath();
         ctx.fill();
+        ctx.fillStyle = "rgba(255,210,190,0.5)";
+        ctx.beginPath();
+        ctx.moveTo(s * r * 0.26, -r * 0.86);
+        ctx.quadraticCurveTo(s * r * 0.4, -r * 1.14, s * r * 0.55, -r * 0.94);
+        ctx.quadraticCurveTo(s * r * 0.42, -r * 0.96, s * r * 0.26, -r * 0.86);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = `hsl(${this.hue} 50% 46%)`;
       }
+      // tiny nose
       ctx.fillStyle = "#1a1d2e";
       ctx.beginPath();
-      ctx.arc(facing * r * 0.6, -r * 0.02, r * 0.07, 0, Math.PI * 2);
+      ctx.arc(facing * r * 0.62, -r * 0.02, r * 0.07, 0, Math.PI * 2);
       ctx.fill();
     } else if (this.kind === "cat") {
-      ctx.fillStyle = `hsl(${this.hue} 25% 45%)`;
+      // pointy ears with inner pink
       for (const s of [-1, 1]) {
+        ctx.fillStyle = `hsl(${this.hue} 28% 44%)`;
         ctx.beginPath();
-        ctx.moveTo(s * r * 0.2, -r * 0.5);
-        ctx.lineTo(s * r * 0.5, -r * 0.5);
-        ctx.lineTo(s * r * 0.42, -r * 1.12);
+        ctx.moveTo(s * r * 0.14, -r * 0.72);
+        ctx.lineTo(s * r * 0.34, -r * 1.2);
+        ctx.lineTo(s * r * 0.66, -r * 0.8);
         ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = "rgba(255,150,160,0.5)";
+        ctx.fillStyle = "rgba(255,160,175,0.55)";
         ctx.beginPath();
-        ctx.moveTo(s * r * 0.26, -r * 0.5);
-        ctx.lineTo(s * r * 0.44, -r * 0.5);
-        ctx.lineTo(s * r * 0.4, -r * 1.0);
+        ctx.moveTo(s * r * 0.22, -r * 0.76);
+        ctx.lineTo(s * r * 0.36, -r * 1.08);
+        ctx.lineTo(s * r * 0.56, -r * 0.84);
         ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = `hsl(${this.hue} 25% 45%)`;
       }
       // whiskers
       ctx.strokeStyle = "rgba(30,30,30,0.5)";
@@ -805,40 +912,60 @@ export class Pet {
       ctx.quadraticCurveTo(facing * r * 0.25, r * 0.1, facing * r * 0.18, r * 0.5);
       ctx.stroke();
     } else if (this.kind === "piglet") {
-      // ears
-      ctx.fillStyle = `hsl(${this.hue} 60% 62%)`;
+      // blush cheeks
+      ctx.fillStyle = "rgba(255,120,150,0.4)";
+      ctx.beginPath();
+      ctx.arc(-r * 0.55, r * 0.2, r * 0.17, 0, Math.PI * 2);
+      ctx.arc(r * 0.55, r * 0.2, r * 0.17, 0, Math.PI * 2);
+      ctx.fill();
+      // floppy triangle ears
       for (const s of [-1, 1]) {
+        ctx.fillStyle = `hsl(${this.hue} 60% 58%)`;
         ctx.beginPath();
-        ctx.ellipse(s * r * 0.42, -r * 0.72, r * 0.2, r * 0.16, s * 0.3, 0, Math.PI * 2);
+        ctx.moveTo(s * r * 0.2, -r * 0.7);
+        ctx.quadraticCurveTo(s * r * 0.15, -r * 1.08, s * r * 0.48, -r * 1.06);
+        ctx.quadraticCurveTo(s * r * 0.55, -r * 0.82, s * r * 0.34, -r * 0.68);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,200,215,0.55)";
+        ctx.beginPath();
+        ctx.moveTo(s * r * 0.26, -r * 0.74);
+        ctx.quadraticCurveTo(s * r * 0.25, -r * 0.98, s * r * 0.44, -r * 0.98);
+        ctx.quadraticCurveTo(s * r * 0.47, -r * 0.84, s * r * 0.34, -r * 0.73);
+        ctx.closePath();
         ctx.fill();
       }
       // snout
       ctx.fillStyle = `hsl(${this.hue} 65% 76%)`;
       ctx.beginPath();
-      ctx.ellipse(facing * r * 0.6, 0, r * 0.34, r * 0.26, 0, 0, Math.PI * 2);
+      ctx.ellipse(facing * r * 0.6, 0, r * 0.36, r * 0.27, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = `hsl(${this.hue} 55% 62%)`;
+      ctx.strokeStyle = `hsl(${this.hue} 55% 60%)`;
       ctx.lineWidth = 1.5;
       ctx.stroke();
-      ctx.fillStyle = "#1a1d2e";
+      // nostrils
+      ctx.fillStyle = "#b3596b";
       ctx.beginPath();
-      ctx.arc(facing * r * 0.72, -r * 0.08, r * 0.06, 0, Math.PI * 2);
-      ctx.arc(facing * r * 0.72, r * 0.08, r * 0.06, 0, Math.PI * 2);
+      ctx.arc(facing * r * 0.72, -r * 0.09, r * 0.07, 0, Math.PI * 2);
+      ctx.arc(facing * r * 0.72, r * 0.09, r * 0.07, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 
   drawFeet(ctx, facing) {
     const r = this.r;
+    const bottoms = { critter: 1.02, squirrel: 1.18, cat: 0.9, piglet: 0.96 };
+    const bot = r * (bottoms[this.kind] ?? 0.95);
+    const w = r * (this.kind === "squirrel" ? 0.55 : 0.5);
     ctx.strokeStyle = `hsl(${this.hue} 70% 30%)`;
     ctx.lineWidth = 3;
     ctx.lineCap = "round";
     const step = this.mood === "scared" || this.mood === "annoyed" ? Math.sin(this.t * 18) * 6 : Math.sin(this.t * 10) * 4;
     ctx.beginPath();
-    ctx.moveTo(-r * 0.4, r * 0.75);
-    ctx.lineTo(-r * 0.4 + step, r * 0.95);
-    ctx.moveTo(r * 0.4, r * 0.75);
-    ctx.lineTo(r * 0.4 - step, r * 0.95);
+    ctx.moveTo(-w, r * 0.72);
+    ctx.lineTo(-w + step, bot);
+    ctx.moveTo(w, r * 0.72);
+    ctx.lineTo(w - step, bot);
     ctx.stroke();
   }
 }
